@@ -1,0 +1,311 @@
+// Prisma Schema for Monthly Contribution System
+// System: Members contribute 1000+ BDT monthly (1-15th)
+// Late payment after 15th: 30 BDT penalty per 1000 BDT
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id                  String          @id @default(uuid())
+  name                String
+  email               String          @unique
+  phone               String          @unique
+  password            String
+  role                Role            @default(MEMBER)
+  memberId            Int             @unique @default(autoincrement())
+  
+  // Profile Information
+  fatherName          String?
+  motherName          String?
+  address             String?
+  occupation          String?
+  nid                 String?         @unique
+  
+  // Membership Details
+  status              MemberStatus    @default(PENDING)
+  joiningDate         DateTime?
+  registrationFee     Int             @default(0)
+  
+  // Reference
+  referencePerson     String?
+  referencePhone      String?
+  
+  // Timestamps
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  
+  // Relations
+  deposits            Deposit[]
+  memberStats         MemberStats?
+  
+  @@index([email])
+  @@index([memberId])
+  @@index([status])
+}
+
+// ============================================
+// MEMBER STATISTICS (Summary)
+// ============================================
+
+model MemberStats {
+  id                      String      @id @default(uuid())
+  memberId                Int         @unique
+  
+  // Financial Summary
+  totalDeposited          BigInt      @default(0)        // Total amount deposited (without penalties)
+  totalPenalties          BigInt      @default(0)        // Total penalties paid
+  totalContribution       BigInt      @default(0)        // Total including penalties
+  
+  // Monthly tracking
+  monthlyDepositAmount    BigInt      @default(1000)     // Expected monthly amount
+  totalMonthsPaid         Int         @default(0)        // Count of months paid
+  consecutiveMonths       Int         @default(0)        // Current payment streak
+  missedMonths            Int         @default(0)        // Months missed
+  
+  // Last activity
+  lastDepositDate         DateTime?
+  lastDepositMonth        DateTime?
+  
+  // Timestamps
+  updatedAt               DateTime    @updatedAt
+  
+  // Relations
+  user                    User        @relation(fields: [memberId], references: [memberId], onDelete: Cascade)
+  
+  @@index([memberId])
+}
+
+// ============================================
+// MONTHLY DEPOSITS
+// ============================================
+
+model Deposit {
+  id                      String              @id @default(uuid())
+  memberId                Int
+  
+  // Deposit Details
+  depositMonth            DateTime                                    // Which month this deposit is for
+  depositAmount           BigInt                                      // Base amount deposited
+  penalty                 BigInt              @default(0)             // Penalty applied (30 per 1000)
+  totalAmount             BigInt                                      // Total = depositAmount + penalty
+  
+  // Payment Info
+  paymentDate             DateTime            @default(now())         // When payment was made
+  paymentMethod           PaymentMethod
+  referencePerson         String                                      // Who approved/received
+  
+  // Status
+  status                  PaymentStatus       @default(PENDING)
+  proofImage              String?                                     // Payment proof URL
+  notes                   String?
+  
+  // Admin Actions
+  approvedBy              Int?                                        // Admin memberId who approved
+  approvedAt              DateTime?
+  rejectionReason         String?
+  
+  // Timestamps
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  
+  // Relations
+  user                    User                @relation(fields: [memberId], references: [memberId], onDelete: Cascade)
+  
+  // Payment method specific details
+  handToHandDetails       HandToHandPayment?
+  mobilePaymentDetails    MobilePayment?
+  bankTransferDetails     BankTransfer?
+  
+  @@index([memberId])
+  @@index([depositMonth])
+  @@index([status])
+  @@index([paymentDate])
+  @@unique([memberId, depositMonth])  // One deposit per member per month
+}
+
+// ============================================
+// PAYMENT METHOD DETAILS
+// ============================================
+
+model HandToHandPayment {
+  id                  String      @id @default(uuid())
+  depositId           String      @unique
+  
+  receiverName        String
+  location            String
+  handoverDate        DateTime
+  handoverTime        String
+  
+  deposit             Deposit     @relation(fields: [depositId], references: [id], onDelete: Cascade)
+}
+
+model MobilePayment {
+  id                  String          @id @default(uuid())
+  depositId           String          @unique
+  
+  provider            String                              // bKash, Nagad, Rocket
+  phoneNumber         String
+  transactionId       String
+  transactionDate     DateTime        @default(now())
+  
+  deposit             Deposit         @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  
+  @@index([transactionId])
+}
+
+model BankTransfer {
+  id                  String      @id @default(uuid())
+  depositId           String      @unique
+  
+  bankName            String?
+  accountNumber       String
+  accountHolderName   String
+  transactionRef      String?
+  
+  deposit             Deposit     @relation(fields: [depositId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// MONTHLY SUMMARY (For Admin Dashboard)
+// ============================================
+
+model MonthlySummary {
+  id                      String      @id @default(uuid())
+  
+  // Month tracking
+  month                   DateTime    @unique                     // First day of the month
+  year                    Int
+  monthNumber             Int                                     // 1-12
+  
+  // Financial Summary
+  totalDeposited          BigInt      @default(0)                 // Total base deposits
+  totalPenalties          BigInt      @default(0)                 // Total penalties
+  totalCollected          BigInt      @default(0)                 // Total including penalties
+  
+  // Member Statistics
+  totalMembers            Int         @default(0)                 // Active members
+  membersPaid             Int         @default(0)                 // Members who paid
+  membersNotPaid          Int         @default(0)                 // Members who didn't pay
+  latePayments            Int         @default(0)                 // Payments after 15th
+  
+  // Deposit Status
+  pendingDeposits         Int         @default(0)
+  approvedDeposits        Int         @default(0)
+  rejectedDeposits        Int         @default(0)
+  
+  // Average amounts
+  averageDeposit          BigInt      @default(0)
+  averagePenalty          BigInt      @default(0)
+  
+  // Timestamps
+  lastCalculated          DateTime    @default(now())
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+  
+  @@index([month])
+  @@index([year, monthNumber])
+}
+
+// ============================================
+// SYSTEM CONFIGURATION
+// ============================================
+
+model SystemConfig {
+  id                      String      @id @default(uuid())
+  
+  // Financial Settings
+  minimumDeposit          BigInt      @default(1000)              // Minimum monthly contribution
+  penaltyPerThousand      BigInt      @default(30)                // Penalty rate
+  penaltyStartDay         Int         @default(16)                // Day when penalty starts
+  registrationFee         BigInt      @default(0)                 // One-time registration fee
+  
+  // System Totals (All-time)
+  totalSystemDeposits     BigInt      @default(0)
+  totalSystemPenalties    BigInt      @default(0)
+  totalSystemAmount       BigInt      @default(0)
+  
+  // Member Counts
+  totalActiveMembers      Int         @default(0)
+  totalSuspendedMembers   Int         @default(0)
+  totalMembers            Int         @default(0)
+  
+  // Timestamps
+  lastUpdated             DateTime    @updatedAt
+  
+  @@map("system_config")
+}
+
+// ============================================
+// AUDIT LOG (Track all changes)
+// ============================================
+
+model AuditLog {
+  id                  String          @id @default(uuid())
+  
+  // Action Details
+  action              String                                  // DEPOSIT_CREATED, DEPOSIT_APPROVED, etc.
+  entityType          String                                  // User, Deposit, etc.
+  entityId            String                                  // ID of affected entity
+  
+  // Actor
+  performedBy         Int?                                    // memberId of who performed action
+  performedByName     String?
+  
+  // Changes
+  oldValue            Json?                                   // Previous state
+  newValue            Json?                                   // New state
+  
+  // Context
+  ipAddress           String?
+  userAgent           String?
+  
+  // Timestamps
+  createdAt           DateTime        @default(now())
+  
+  @@index([entityType, entityId])
+  @@index([performedBy])
+  @@index([createdAt])
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  MEMBER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum MemberStatus {
+  PENDING         // Registration pending
+  ACTIVE          // Active member
+  SUSPENDED       // Temporarily suspended
+  INACTIVE        // Left the group
+  REJECTED        // Registration rejected
+}
+
+enum PaymentStatus {
+  PENDING         // Waiting for admin approval
+  APPROVED        // Approved by admin
+  REJECTED        // Rejected by admin
+  CANCELLED       // Cancelled by member
+}
+
+enum PaymentMethod {
+  HAND_TO_HAND
+  BKASH
+  NAGAD
+  ROCKET
+  BANK_TRANSFER
+}
