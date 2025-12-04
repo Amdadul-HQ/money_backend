@@ -1,4 +1,3 @@
-import { BullModule } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -24,21 +23,21 @@ import { AppService } from './app.service';
 
     ScheduleModule.forRoot(),
 
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const host = configService.getOrThrow<string>(ENVEnum.REDIS_HOST);
-        const port = configService.getOrThrow<string>(ENVEnum.REDIS_PORT);
+    // BullModule.forRootAsync({
+    //   imports: [ConfigModule],
+    //   inject: [ConfigService],
+    //   useFactory: (configService: ConfigService) => {
+    //     const host = configService.getOrThrow<string>(ENVEnum.REDIS_HOST);
+    //     const port = configService.getOrThrow<string>(ENVEnum.REDIS_PORT);
 
-        return {
-          connection: {
-            host,
-            port: parseInt(port, 10),
-          },
-        };
-      },
-    }),
+    //     return {
+    //       connection: {
+    //         host,
+    //         port: parseInt(port, 10),
+    //       },
+    //     };
+    //   },
+    // }),
 
     PassportModule,
 
