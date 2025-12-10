@@ -94,7 +94,7 @@ export class UserRequestService {
     });
 
     // Create a map for quick lookup
-    const auditMap = new Map<string, typeof auditLogs[0]>();
+    const auditMap = new Map<string, (typeof auditLogs)[0]>();
     auditLogs.forEach((log) => {
       if (!auditMap.has(log.entityId)) {
         auditMap.set(log.entityId, log);
