@@ -112,14 +112,77 @@ export class AuthService {
    */
   @HandleError('Failed to login user')
   async login(loginDto: LoginDto) {
-    const { email, password } = loginDto;
+    const { loginType, login, password } = loginDto;
 
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    // Find user based on login type
+    let user: {
+      id: string;
+      email: string;
+      password: string;
+      role: string;
+      status: string;
+      memberId: number;
+      name: string;
+      phone: string;
+    } | null = null;
+
+    switch (loginType) {
+      case 'email': {
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(login)) {
+          throw new BadRequestException('Invalid email address format');
+        }
+        user = await this.prisma.user.findUnique({
+          where: { email: login },
+        });
+        break;
+      }
+
+      case 'phone': {
+        // Normalize phone number (remove spaces, dashes, +)
+        const normalizedPhone = login.replace(/[\s\-+]/g, '');
+        // Try exact match first, then partial match
+        user = await this.prisma.user.findFirst({
+          where: {
+            OR: [
+              { phone: normalizedPhone },
+              {
+                phone: {
+                  contains: normalizedPhone,
+                },
+              },
+            ],
+          },
+        });
+        break;
+      }
+
+      case 'memberid': {
+        // Member ID is numeric, extract number from string if needed
+        const memberIdNumber = parseInt(login.replace(/\D/g, ''), 10);
+        if (isNaN(memberIdNumber)) {
+          throw new BadRequestException('Invalid member ID format');
+        }
+        user = await this.prisma.user.findUnique({
+          where: { memberId: memberIdNumber },
+        });
+        break;
+      }
+
+      default:
+        throw new BadRequestException('Invalid login type');
+    }
 
     if (!user) {
       throw new NotFoundException('User does not exist');
+    }
+
+    // Check if user is active
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException(
+        'Your account is not active. Please contact support.',
+      );
     }
 
     const isPasswordMatch = await this.libUtils.comparePassword({

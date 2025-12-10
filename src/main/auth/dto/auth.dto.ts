@@ -7,6 +7,7 @@ import {
   Matches,
   IsNumber,
   IsDateString,
+  IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -92,10 +93,24 @@ export class RegisterUserDto {
 }
 
 export class LoginDto {
-  @ApiProperty({ example: 'john@example.com' })
-  @IsNotEmpty({ message: 'Email is required' })
-  @IsEmail({}, { message: 'Invalid email address' })
-  email: string;
+  @ApiProperty({
+    example: 'email',
+    enum: ['email', 'phone', 'memberid'],
+    description: 'Type of login identifier',
+  })
+  @IsNotEmpty({ message: 'Login type is required' })
+  @IsEnum(['email', 'phone', 'memberid'], {
+    message: 'Login type must be email, phone, or memberid',
+  })
+  loginType: 'email' | 'phone' | 'memberid';
+
+  @ApiProperty({
+    example: 'john@example.com',
+    description: 'Email, phone number, or member ID based on loginType',
+  })
+  @IsNotEmpty({ message: 'Login identifier is required' })
+  @IsString()
+  login: string;
 
   @ApiProperty({ example: 'SecurePass123!' })
   @IsNotEmpty({ message: 'Password is required' })
