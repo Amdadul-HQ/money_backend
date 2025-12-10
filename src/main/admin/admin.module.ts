@@ -7,10 +7,11 @@ import { DepositRequestService } from './deposit-request.service';
 import { DepositRequestController } from './deposit-request.controller';
 import { PrismaModule } from 'src/common/prisma/prisma.module';
 import { UtilsModule } from 'src/common/utils/utils.module';
+import { EmailModule } from 'src/common/email/email.module';
 import { AdminGuard } from 'src/common/jwt/admin.guard';
 
 @Module({
-  imports: [PrismaModule, UtilsModule],
+  imports: [PrismaModule, UtilsModule, EmailModule],
   controllers: [
     AdminController,
     UserRequestController,

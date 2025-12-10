@@ -2,11 +2,15 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { UtilsService } from 'src/common/utils/utils.service';
+import { EmailService } from 'src/common/email/email.service';
 import { successResponse } from 'src/common/utils/response.util';
 import { HandleError } from 'src/common/error/handle-error.decorator';
+import { ENVEnum } from 'src/common/enum/env.enum';
 import {
   QueryDepositRequestDto,
   DepositRequestDto,
@@ -19,9 +23,13 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class DepositRequestService {
+  private readonly logger = new Logger(DepositRequestService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly libUtils: UtilsService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -577,6 +585,36 @@ export class DepositRequestService {
 
       return deposit;
     });
+
+    // Send rejection email (don't fail if email fails)
+    try {
+      const depositMonth = new Date(updatedDeposit.depositMonth);
+      const monthString = depositMonth.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+      });
+
+      // Get support email from config or use from email
+      const supportEmail =
+        this.configService.get<string>(ENVEnum.SMTP_FROM_EMAIL) ||
+        this.configService.get<string>(ENVEnum.SMTP_USER) ||
+        'support@example.com';
+
+      await this.emailService.sendDepositRejectionEmail(
+        deposit.user.email,
+        deposit.user.name,
+        Number(updatedDeposit.depositAmount),
+        monthString,
+        dto.rejectionReason,
+        supportEmail,
+      );
+    } catch (error) {
+      // Log error but don't fail the rejection
+      this.logger.error(
+        `Failed to send rejection email to ${deposit.user.email}:`,
+        error,
+      );
+    }
 
     return successResponse(
       {
