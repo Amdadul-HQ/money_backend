@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  HttpException,
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
@@ -39,6 +41,18 @@ export function simplifyError(
       default:
         throw new InternalServerErrorException(error.message);
     }
+  }
+
+  // Pass through known HTTP exceptions to preserve status codes
+  if (
+    error instanceof BadRequestException ||
+    error instanceof UnauthorizedException ||
+    error instanceof NotFoundException ||
+    error instanceof ConflictException ||
+    error instanceof ForbiddenException ||
+    error instanceof HttpException
+  ) {
+    throw error;
   }
 
   throw new InternalServerErrorException(customMessage);
