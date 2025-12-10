@@ -399,27 +399,29 @@ export class DepositRequestService {
 
     const adminName = admin?.name || 'Admin';
 
-    const deposit = await this.prisma.deposit.findUnique({
+    const depositRecord = await this.prisma.deposit.findUnique({
       where: { id: depositId },
       include: {
         user: {
           select: {
             memberId: true,
             name: true,
+            email: true,
+            phone: true,
           },
         },
       },
     });
 
-    if (!deposit) {
+    if (!depositRecord) {
       throw new NotFoundException('Deposit request not found');
     }
 
-    if (deposit.status === PaymentStatus.APPROVED) {
+    if (depositRecord.status === PaymentStatus.APPROVED) {
       throw new BadRequestException('Deposit is already approved');
     }
 
-    if (deposit.status === PaymentStatus.REJECTED) {
+    if (depositRecord.status === PaymentStatus.REJECTED) {
       throw new BadRequestException(
         'Cannot approve a rejected deposit. Please create a new deposit request.',
       );
@@ -428,33 +430,33 @@ export class DepositRequestService {
     // Update deposit status and update MemberStats
     const updatedDeposit = await this.prisma.$transaction(async (tx) => {
       // Update deposit
-      const deposit = await tx.deposit.update({
+      const updated = await tx.deposit.update({
         where: { id: depositId },
         data: {
           status: PaymentStatus.APPROVED,
           approvedBy: adminMemberId,
           approvedAt: new Date(),
-          notes: dto.notes || deposit.notes,
+          notes: dto.notes || depositRecord.notes,
         },
       });
 
       // Update MemberStats
       const memberStats = await tx.memberStats.findUnique({
-        where: { memberId: deposit.user.memberId },
+        where: { memberId: depositRecord.user.memberId },
       });
 
       if (memberStats) {
         await tx.memberStats.update({
-          where: { memberId: deposit.user.memberId },
+          where: { memberId: depositRecord.user.memberId },
           data: {
             totalDeposited: {
-              increment: deposit.depositAmount,
+              increment: depositRecord.depositAmount,
             },
             totalPenalties: {
-              increment: deposit.penalty,
+              increment: depositRecord.penalty,
             },
             totalContribution: {
-              increment: deposit.totalAmount,
+              increment: depositRecord.totalAmount,
             },
             totalMonthsPaid: {
               increment: 1,
@@ -462,22 +464,22 @@ export class DepositRequestService {
             consecutiveMonths: {
               increment: 1,
             },
-            lastDepositDate: deposit.paymentDate,
-            lastDepositMonth: deposit.depositMonth,
+            lastDepositDate: depositRecord.paymentDate,
+            lastDepositMonth: depositRecord.depositMonth,
           },
         });
       } else {
         // Create MemberStats if doesn't exist
         await tx.memberStats.create({
           data: {
-            memberId: deposit.user.memberId,
-            totalDeposited: deposit.depositAmount,
-            totalPenalties: deposit.penalty,
-            totalContribution: deposit.totalAmount,
+            memberId: depositRecord.user.memberId,
+            totalDeposited: depositRecord.depositAmount,
+            totalPenalties: depositRecord.penalty,
+            totalContribution: depositRecord.totalAmount,
             totalMonthsPaid: 1,
             consecutiveMonths: 1,
-            lastDepositDate: deposit.paymentDate,
-            lastDepositMonth: deposit.depositMonth,
+            lastDepositDate: depositRecord.paymentDate,
+            lastDepositMonth: depositRecord.depositMonth,
           },
         });
       }
@@ -487,7 +489,7 @@ export class DepositRequestService {
         data: {
           action: 'DEPOSIT_APPROVED',
           entityType: 'Deposit',
-          entityId: deposit.id,
+          entityId: updated.id,
           performedBy: adminMemberId,
           performedByName: adminName,
           newValue: {
@@ -498,14 +500,14 @@ export class DepositRequestService {
         },
       });
 
-      return deposit;
+      return updated;
     });
 
     return successResponse(
       {
         id: updatedDeposit.id,
-        memberId: deposit.user.memberId,
-        memberName: deposit.user.name,
+        memberId: depositRecord.user.memberId,
+        memberName: depositRecord.user.name,
         status: 'APPROVED',
         approvedAt: new Date(),
         approvedBy: adminName,
@@ -531,27 +533,28 @@ export class DepositRequestService {
 
     const adminName = admin?.name || 'Admin';
 
-    const deposit = await this.prisma.deposit.findUnique({
+    const depositRecord = await this.prisma.deposit.findUnique({
       where: { id: depositId },
       include: {
         user: {
           select: {
             memberId: true,
             name: true,
+            email: true,
           },
         },
       },
     });
 
-    if (!deposit) {
+    if (!depositRecord) {
       throw new NotFoundException('Deposit request not found');
     }
 
-    if (deposit.status === PaymentStatus.REJECTED) {
+    if (depositRecord.status === PaymentStatus.REJECTED) {
       throw new BadRequestException('Deposit is already rejected');
     }
 
-    if (deposit.status === PaymentStatus.APPROVED) {
+    if (depositRecord.status === PaymentStatus.APPROVED) {
       throw new BadRequestException(
         'Cannot reject an approved deposit. Please handle this through other means.',
       );
@@ -559,7 +562,7 @@ export class DepositRequestService {
 
     // Update deposit status to REJECTED
     const updatedDeposit = await this.prisma.$transaction(async (tx) => {
-      const deposit = await tx.deposit.update({
+      const updated = await tx.deposit.update({
         where: { id: depositId },
         data: {
           status: PaymentStatus.REJECTED,
@@ -572,7 +575,7 @@ export class DepositRequestService {
         data: {
           action: 'DEPOSIT_REJECTED',
           entityType: 'Deposit',
-          entityId: deposit.id,
+          entityId: updated.id,
           performedBy: adminMemberId,
           performedByName: adminName,
           newValue: {
@@ -583,7 +586,7 @@ export class DepositRequestService {
         },
       });
 
-      return deposit;
+      return updated;
     });
 
     // Send rejection email (don't fail if email fails)
@@ -601,8 +604,8 @@ export class DepositRequestService {
         'support@example.com';
 
       await this.emailService.sendDepositRejectionEmail(
-        deposit.user.email,
-        deposit.user.name,
+        depositRecord.user.email,
+        depositRecord.user.name,
         Number(updatedDeposit.depositAmount),
         monthString,
         dto.rejectionReason,
@@ -611,7 +614,7 @@ export class DepositRequestService {
     } catch (error) {
       // Log error but don't fail the rejection
       this.logger.error(
-        `Failed to send rejection email to ${deposit.user.email}:`,
+        `Failed to send rejection email to ${depositRecord.user.email}:`,
         error,
       );
     }
@@ -619,8 +622,8 @@ export class DepositRequestService {
     return successResponse(
       {
         id: updatedDeposit.id,
-        memberId: deposit.user.memberId,
-        memberName: deposit.user.name,
+        memberId: depositRecord.user.memberId,
+        memberName: depositRecord.user.name,
         status: 'REJECTED',
         rejectionReason: dto.rejectionReason,
         rejectedAt: new Date(),
