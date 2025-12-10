@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
+import { DepositModule } from './deposit/deposit.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, DepositModule],
   controllers: [],
   providers: [],
 })
