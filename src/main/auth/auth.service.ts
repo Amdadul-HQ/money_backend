@@ -5,18 +5,29 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { successResponse } from 'src/common/utils/response.util';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { UtilsService } from 'src/common/utils/utils.service';
-import { LoginDto, RegisterUserDto } from './dto/auth.dto';
+import { EmailService } from 'src/common/email/email.service';
+import {
+  LoginDto,
+  RegisterUserDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  RefreshTokenDto,
+} from './dto/auth.dto';
 import { HandleError } from 'src/common/error/handle-error.decorator';
+import { ENVEnum } from 'src/common/enum/env.enum';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly libUtils: UtilsService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -56,7 +67,31 @@ export class AuthService {
           sub: user.id,
         });
 
-        return successResponse({ user, token }, 'User registered successfully');
+        const refreshToken = this.libUtils.generateRefreshToken({
+          email: user.email,
+          roles: user.role,
+          sub: user.id,
+        });
+
+        // Save refresh token to database
+        const expiresIn = this.configService.get<string>(
+          ENVEnum.JWT_REFRESH_EXPIRES_IN,
+          '7d',
+        );
+        const expiresAt = this.calculateExpiryDate(expiresIn);
+
+        await tx.refreshToken.create({
+          data: {
+            userId: user.id,
+            token: refreshToken,
+            expiresAt,
+          },
+        });
+
+        return successResponse(
+          { user, token, refreshToken },
+          'User registered successfully',
+        );
       });
     } catch (err) {
       console.error('REGISTER ERROR:', err);
@@ -102,7 +137,28 @@ export class AuthService {
       sub: user.id,
     });
 
-    return successResponse({ user, token }, 'Login successful');
+    const refreshToken = this.libUtils.generateRefreshToken({
+      email: user.email,
+      roles: user.role,
+      sub: user.id,
+    });
+
+    // Save refresh token to database
+    const expiresIn = this.configService.get<string>(
+      ENVEnum.JWT_REFRESH_EXPIRES_IN,
+      '7d',
+    );
+    const expiresAt = this.calculateExpiryDate(expiresIn);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        expiresAt,
+      },
+    });
+
+    return successResponse({ user, token, refreshToken }, 'Login successful');
   }
 
   /**
@@ -331,5 +387,298 @@ export class AuthService {
     }
 
     return successResponse(user, 'User profile retrieved successfully');
+  }
+
+  /**
+   * 🔹 Request password reset (Forgot Password)
+   */
+  @HandleError('Failed to process password reset request')
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const { email } = dto;
+
+    // Find user by email
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    // Don't reveal if user exists or not (security best practice)
+    // Always return success message to prevent email enumeration
+    if (!user) {
+      // Return success even if user doesn't exist to prevent email enumeration
+      return successResponse(
+        null,
+        'If an account with that email exists, a password reset link has been sent.',
+      );
+    }
+
+    // Check for recent password reset requests (rate limiting)
+    const recentResetRequest = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        userId: user.id,
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+        createdAt: {
+          gte: new Date(Date.now() - 5 * 60 * 1000), // Last 5 minutes
+        },
+      },
+    });
+
+    if (recentResetRequest) {
+      // Don't reveal rate limiting to prevent abuse
+      return successResponse(
+        null,
+        'If an account with that email exists, a password reset link has been sent.',
+      );
+    }
+
+    // Invalidate all previous unused tokens for this user
+    await this.prisma.passwordResetToken.updateMany({
+      where: {
+        userId: user.id,
+        used: false,
+      },
+      data: {
+        used: true,
+      },
+    });
+
+    // Generate reset token
+    const resetToken = this.libUtils.generatePasswordResetToken();
+    const expiryMinutes = parseInt(
+      this.configService.get<string>(ENVEnum.PASSWORD_RESET_TOKEN_EXPIRY, '15'),
+      10,
+    );
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + expiryMinutes);
+
+    // Save reset token to database
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token: resetToken,
+        expiresAt,
+      },
+    });
+
+    // Send password reset email
+    try {
+      await this.emailService.sendPasswordResetEmail(
+        user.email,
+        resetToken,
+        user.name,
+      );
+    } catch (error) {
+      // If email fails, still return success to prevent email enumeration
+      console.error('Failed to send password reset email:', error);
+    }
+
+    return successResponse(
+      null,
+      'If an account with that email exists, a password reset link has been sent.',
+    );
+  }
+
+  /**
+   * 🔹 Reset password with token
+   */
+  @HandleError('Failed to reset password')
+  async resetPassword(dto: ResetPasswordDto) {
+    const { token, newPassword, confirmPassword } = dto;
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    // Find valid reset token
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!resetToken) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Check if token is already used
+    if (resetToken.used) {
+      throw new BadRequestException('Reset token has already been used');
+    }
+
+    // Check if token is expired
+    if (resetToken.expiresAt < new Date()) {
+      // Mark as used to prevent reuse
+      await this.prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { used: true },
+      });
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    // Check if user still exists
+    if (!resetToken.user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and mark token as used in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Update user password
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      });
+
+      // Mark token as used
+      await tx.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { used: true },
+      });
+
+      // Invalidate all refresh tokens for security
+      await tx.refreshToken.updateMany({
+        where: {
+          userId: resetToken.userId,
+          revoked: false,
+        },
+        data: {
+          revoked: true,
+          revokedAt: new Date(),
+        },
+      });
+    });
+
+    return successResponse(null, 'Password reset successfully');
+  }
+
+  /**
+   * 🔹 Refresh access token using refresh token
+   */
+  @HandleError('Failed to refresh token')
+  async refreshToken(dto: RefreshTokenDto) {
+    const { refreshToken } = dto;
+
+    try {
+      this.libUtils.verifyRefreshToken(refreshToken);
+    } catch (error) {
+      console.error('❌ Refresh token verification error:', error);
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Check if refresh token exists in database and is valid
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true },
+    });
+
+    if (!storedToken) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    // Check if token is revoked
+    if (storedToken.revoked) {
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    // Check if token is expired
+    if (storedToken.expiresAt < new Date()) {
+      // Mark as revoked
+      await this.prisma.refreshToken.update({
+        where: { id: storedToken.id },
+        data: {
+          revoked: true,
+          revokedAt: new Date(),
+        },
+      });
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    // Check if user still exists and is active
+    if (!storedToken.user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Generate new access token
+    const newAccessToken = this.libUtils.generateToken({
+      email: storedToken.user.email,
+      roles: storedToken.user.role,
+      sub: storedToken.user.id,
+    });
+
+    // Optionally rotate refresh token (security best practice)
+    // For now, we'll keep the same refresh token
+    // You can implement token rotation if needed
+
+    return successResponse(
+      { token: newAccessToken, refreshToken },
+      'Token refreshed successfully',
+    );
+  }
+
+  /**
+   * 🔹 Revoke refresh token (logout)
+   */
+  @HandleError('Failed to revoke token')
+  async revokeRefreshToken(refreshToken: string) {
+    const token = await this.prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+    });
+
+    if (!token) {
+      throw new NotFoundException('Refresh token not found');
+    }
+
+    if (token.revoked) {
+      return successResponse(null, 'Token already revoked');
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: token.id },
+      data: {
+        revoked: true,
+        revokedAt: new Date(),
+      },
+    });
+
+    return successResponse(null, 'Token revoked successfully');
+  }
+
+  /**
+   * Helper method to calculate expiry date from string (e.g., "7d", "24h")
+   */
+  private calculateExpiryDate(expiresIn: string): Date {
+    const date = new Date();
+    const match = expiresIn.match(/^(\d+)([dhms])$/);
+    if (!match) {
+      // Default to 7 days if format is invalid
+      date.setDate(date.getDate() + 7);
+      return date;
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    switch (unit) {
+      case 'd':
+        date.setDate(date.getDate() + value);
+        break;
+      case 'h':
+        date.setHours(date.getHours() + value);
+        break;
+      case 'm':
+        date.setMinutes(date.getMinutes() + value);
+        break;
+      case 's':
+        date.setSeconds(date.getSeconds() + value);
+        break;
+      default:
+        date.setDate(date.getDate() + 7);
+    }
+
+    return date;
   }
 }

@@ -47,10 +47,53 @@ model User {
   // Relations
   deposits            Deposit[]
   memberStats         MemberStats?
+  passwordResetTokens PasswordResetToken[]
+  refreshTokens       RefreshToken[]
   
   @@index([email])
   @@index([memberId])
   @@index([status])
+}
+
+// ============================================
+// PASSWORD RESET TOKEN
+// ============================================
+
+model PasswordResetToken {
+  id          String      @id @default(uuid())
+  userId      String
+  token       String      @unique
+  expiresAt   DateTime
+  used        Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============================================
+// REFRESH TOKEN
+// ============================================
+
+model RefreshToken {
+  id          String      @id @default(uuid())
+  userId      String
+  token       String      @unique
+  expiresAt   DateTime
+  revoked     Boolean     @default(false)
+  revokedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
 }
 
 // ============================================

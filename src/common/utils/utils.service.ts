@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { plainToInstance } from 'class-transformer';
 import { AppError } from 'src/common/error/handle-error.app';
 import { JWTPayload } from 'src/common/jwt/jwt.interface';
@@ -42,6 +43,50 @@ export class UtilsService {
     });
 
     return token;
+  }
+
+  generateRefreshToken(payload: JWTPayload): string {
+    const refreshSecret = this.configService.get<string>(
+      ENVEnum.JWT_REFRESH_SECRET,
+    );
+    const refreshExpiresIn = this.configService.get<string>(
+      ENVEnum.JWT_REFRESH_EXPIRES_IN,
+      '7d',
+    );
+
+    if (!refreshSecret) {
+      throw new Error('JWT_REFRESH_SECRET is not configured');
+    }
+
+    const token = this.jwtService.sign(payload, {
+      secret: refreshSecret,
+      expiresIn: refreshExpiresIn,
+    });
+
+    return token;
+  }
+
+  verifyRefreshToken(token: string): JWTPayload {
+    const refreshSecret = this.configService.get<string>(
+      ENVEnum.JWT_REFRESH_SECRET,
+    );
+
+    if (!refreshSecret) {
+      throw new Error('JWT_REFRESH_SECRET is not configured');
+    }
+
+    try {
+      return this.jwtService.verify<JWTPayload>(token, {
+        secret: refreshSecret,
+      });
+    } catch (error) {
+      throw new Error('Invalid or expired refresh token');
+    }
+  }
+
+  generatePasswordResetToken(): string {
+    // Generate a secure random token
+    return crypto.randomBytes(32).toString('hex');
   }
 
   generateOtpAndExpiry(): { otp: number; expiryTime: Date } {

@@ -148,3 +148,38 @@ export class UpdateProfileDto {
   @IsString()
   occupation?: string;
 }
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'john@example.com' })
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: 'Invalid email address' })
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ example: 'reset-token-here' })
+  @IsNotEmpty({ message: 'Token is required' })
+  @IsString()
+  token: string;
+
+  @ApiProperty({ example: 'NewSecurePass123!' })
+  @IsNotEmpty({ message: 'New password is required' })
+  @IsString()
+  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
+    message: 'Password must contain uppercase, lowercase, and number',
+  })
+  newPassword: string;
+
+  @ApiProperty({ example: 'NewSecurePass123!' })
+  @IsNotEmpty({ message: 'Confirm password is required' })
+  @IsString()
+  confirmPassword: string;
+}
+
+export class RefreshTokenDto {
+  @ApiProperty({ example: 'refresh-token-here' })
+  @IsNotEmpty({ message: 'Refresh token is required' })
+  @IsString()
+  refreshToken: string;
+}
