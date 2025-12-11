@@ -25,6 +25,7 @@
     "prisma:studio": "npx prisma studio",
     "prisma:validate": "npx prisma validate",
     "prisma:format": "npx prisma format",
+    "seed:admin": "ts-node prisma/seed-admin.ts",
     "postinstall": "npx prisma generate"
   },
   "dependencies": {

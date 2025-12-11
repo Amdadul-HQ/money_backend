@@ -17,7 +17,7 @@ export class UtilsService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   sanitizedResponse(sto: any, data: any) {
     return plainToInstance(sto, data, { excludeExtraneousValues: true });
@@ -37,9 +37,11 @@ export class UtilsService {
   }
 
   generateToken(payload: JWTPayload): string {
+    const expiresIn = this.configService.get<string>(ENVEnum.JWT_EXPIRES_IN) || '1h';
+
     const token = this.jwtService.sign(payload, {
       secret: this.configService.get<string>(ENVEnum.JWT_SECRET),
-      expiresIn: this.configService.get<string>(ENVEnum.JWT_EXPIRES_IN),
+      expiresIn: expiresIn,
     });
 
     return token;
@@ -51,8 +53,7 @@ export class UtilsService {
     );
     const refreshExpiresIn = this.configService.get<string>(
       ENVEnum.JWT_REFRESH_EXPIRES_IN,
-      '7d',
-    );
+    ) || '7d';
 
     if (!refreshSecret) {
       throw new Error('JWT_REFRESH_SECRET is not configured');

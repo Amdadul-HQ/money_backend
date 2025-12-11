@@ -28,7 +28,7 @@ export class AuthService {
     private readonly libUtils: UtilsService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * 🔹 Register user with email/password + social links
@@ -221,7 +221,13 @@ export class AuthService {
       },
     });
 
-    return successResponse({ user, token, refreshToken }, 'Login successful');
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+
+    return successResponse(
+      { user: userWithoutPassword, token, refreshToken },
+      'Login successful',
+    );
   }
 
   /**
@@ -449,7 +455,17 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    return successResponse(user, 'User profile retrieved successfully');
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+
+    // Convert BigInt values to strings for JSON serialization
+    const serializedUser = JSON.parse(
+      JSON.stringify(userWithoutPassword, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      ),
+    );
+
+    return successResponse(serializedUser, 'User profile retrieved successfully');
   }
 
   /**
