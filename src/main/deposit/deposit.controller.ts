@@ -24,7 +24,7 @@ import {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class DepositController {
-  constructor(private readonly depositService: DepositService) {}
+  constructor(private readonly depositService: DepositService) { }
 
   /**
    * 🔹 Create a new deposit
@@ -36,6 +36,15 @@ export class DepositController {
     @GetUser('userId') userId: string,
   ) {
     return await this.depositService.createDeposit(createDepositDto, userId);
+  }
+
+  /**
+   * 🔹 Get member overview (dashboard statistics)
+   */
+  @Get('overview')
+  @ApiOperation({ summary: 'Get member overview dashboard data' })
+  async getMemberOverview(@GetUser('userId') userId: string) {
+    return await this.depositService.getMemberOverview(userId);
   }
 
   /**

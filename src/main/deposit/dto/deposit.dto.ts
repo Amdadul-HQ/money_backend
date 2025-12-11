@@ -246,3 +246,92 @@ export class QueryDepositDto {
   paymentMethod?: PaymentMethod;
 }
 
+// ============================================
+// Member Overview DTOs
+// ============================================
+
+export class RecentDepositDto {
+  @ApiProperty({ example: 'August 2024' })
+  month: string;
+
+  @ApiProperty({ example: 15000 })
+  amount: number;
+
+  @ApiProperty({ example: '2024-08-15' })
+  date: string;
+
+  @ApiProperty({ example: 500 })
+  penalty: number;
+
+  @ApiProperty({ example: true })
+  isPenalized: boolean;
+
+  @ApiProperty({ example: 5 })
+  daysLate: number;
+}
+
+export class MonthlyPaymentDto {
+  @ApiProperty({ example: 'Jan' })
+  month: string;
+
+  @ApiProperty({ example: 12000 })
+  amount: number;
+}
+
+export class CurrentMonthStatusDto {
+  @ApiProperty({ example: 'September 2024' })
+  month: string;
+
+  @ApiProperty({ example: 16000 })
+  amount: number;
+
+  @ApiProperty({ example: true })
+  isPaid: boolean;
+
+  @ApiProperty({ example: '2024-09-15T00:00:00Z', required: false })
+  paymentDate?: string;
+
+  @ApiProperty({ example: 0 })
+  daysLate: number;
+
+  @ApiProperty({ example: 0 })
+  penalty: number;
+}
+
+export class SummaryStatsDto {
+  @ApiProperty({ example: 69000 })
+  last5MonthsTotal: number;
+
+  @ApiProperty({ example: 12500 })
+  averageMonthly: number;
+
+  @ApiProperty({ example: 5 })
+  recentDepositsCount: number;
+
+  @ApiProperty({ example: 8 })
+  monthsPaid: number;
+
+  @ApiProperty({ example: 2 })
+  latePaymentsCount: number;
+}
+
+export class MemberOverviewResponseDto {
+  @ApiProperty({ example: 125000 })
+  totalReserved: number;
+
+  @ApiProperty({ example: 2500 })
+  totalPenalty: number;
+
+  @ApiProperty({ type: CurrentMonthStatusDto })
+  currentMonth: CurrentMonthStatusDto;
+
+  @ApiProperty({ type: [RecentDepositDto] })
+  recentDeposits: RecentDepositDto[];
+
+  @ApiProperty({ type: [MonthlyPaymentDto] })
+  monthlyPayments: MonthlyPaymentDto[];
+
+  @ApiProperty({ type: SummaryStatsDto })
+  summaryStats: SummaryStatsDto;
+}
+
