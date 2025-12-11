@@ -24,7 +24,7 @@ export class DepositService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly libUtils: UtilsService,
-  ) {}
+  ) { }
 
   /**
    * 🔹 Calculate penalty based on payment date and deposit month
@@ -619,6 +619,149 @@ export class DepositService {
     });
 
     return successResponse(null, 'Deposit deleted successfully');
+  }
+
+  /**
+   * 🔹 Get Member Overview - Dashboard statistics
+   */
+  @HandleError('Failed to retrieve member overview')
+  async getMemberOverview(userId: string) {
+    // Get user with member ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { memberId: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get all APPROVED deposits for the user
+    const deposits = await this.prisma.deposit.findMany({
+      where: {
+        memberId: user.memberId,
+        status: PaymentStatus.APPROVED,
+      },
+      orderBy: {
+        depositMonth: 'desc',
+      },
+    });
+
+    // Calculate total reserved and total penalty
+    const totalReserved = deposits.reduce(
+      (sum, deposit) => sum + Number(deposit.depositAmount),
+      0,
+    );
+    const totalPenalty = deposits.reduce(
+      (sum, deposit) => sum + Number(deposit.penalty),
+      0,
+    );
+
+    // Get current date info
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth(); // 0-11
+
+    // Helper function to get days late
+    const getDaysLate = (paymentDate: Date, depositMonth: Date): number => {
+      const penaltyStartDate = new Date(depositMonth);
+      penaltyStartDate.setDate(this.PENALTY_START_DAY);
+
+      if (paymentDate > penaltyStartDate) {
+        const diffTime = paymentDate.getTime() - penaltyStartDate.getTime();
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+      return 0;
+    };
+
+    // Helper function to format month name
+    const getMonthName = (date: Date): string => {
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
+    // Get recent deposits (last 5)
+    const recentDeposits = deposits.slice(0, 5).map((deposit) => {
+      const daysLate = getDaysLate(deposit.paymentDate, deposit.depositMonth);
+      const isPenalized = Number(deposit.penalty) > 0;
+
+      return {
+        month: getMonthName(deposit.depositMonth),
+        amount: Number(deposit.depositAmount),
+        date: deposit.paymentDate.toISOString().split('T')[0],
+        penalty: Number(deposit.penalty),
+        isPenalized,
+        daysLate,
+      };
+    });
+
+    // Build 12-month payment data for current year
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyPayments = monthNames.map((monthName, index) => {
+      // Create date for this month of current year
+      const monthDate = new Date(currentYear, index, 1);
+
+      // Find deposit for this month
+      const deposit = deposits.find((d) => {
+        const depMonth = new Date(d.depositMonth);
+        return (
+          depMonth.getFullYear() === currentYear &&
+          depMonth.getMonth() === index
+        );
+      });
+
+      return {
+        month: monthName,
+        amount: deposit ? Number(deposit.depositAmount) : 0,
+      };
+    });
+
+    // Check current month status
+    const currentMonthDate = new Date(currentYear, currentMonthIndex, 1);
+    const currentMonthDeposit = deposits.find((d) => {
+      const depMonth = new Date(d.depositMonth);
+      return (
+        depMonth.getFullYear() === currentYear &&
+        depMonth.getMonth() === currentMonthIndex
+      );
+    });
+
+    const currentMonth = {
+      month: getMonthName(currentMonthDate),
+      amount: currentMonthDeposit ? Number(currentMonthDeposit.depositAmount) : 1000, // Default expected amount
+      isPaid: !!currentMonthDeposit,
+      paymentDate: currentMonthDeposit ? currentMonthDeposit.paymentDate.toISOString() : undefined,
+      daysLate: currentMonthDeposit
+        ? getDaysLate(currentMonthDeposit.paymentDate, currentMonthDeposit.depositMonth)
+        : 0,
+      penalty: currentMonthDeposit ? Number(currentMonthDeposit.penalty) : 0,
+    };
+
+    // Calculate summary statistics
+    const last5MonthsTotal = recentDeposits.reduce((sum, d) => sum + d.amount, 0);
+    const monthsPaid = deposits.length;
+    const latePaymentsCount = deposits.filter((d) => Number(d.penalty) > 0).length;
+
+    // Calculate average monthly (sum of all deposits / 12 months)
+    const averageMonthly = monthsPaid > 0 ? Math.round(totalReserved / 12) : 0;
+
+    const summaryStats = {
+      last5MonthsTotal,
+      averageMonthly,
+      recentDepositsCount: recentDeposits.length,
+      monthsPaid,
+      latePaymentsCount,
+    };
+
+    const overview = {
+      totalReserved,
+      totalPenalty,
+      currentMonth,
+      recentDeposits,
+      monthlyPayments,
+      summaryStats,
+    };
+
+    return successResponse(overview, 'Member overview retrieved successfully');
   }
 
   /**
