@@ -524,22 +524,38 @@ export class AuthService {
     });
 
     // Generate reset token
+    // Generate reset token
     const resetToken = this.libUtils.generatePasswordResetToken();
-    const expiryMinutes = parseInt(
-      this.configService.get<string>(ENVEnum.PASSWORD_RESET_TOKEN_EXPIRY, '15'),
-      10,
-    );
+
+    let expiryMinutes = 15;
+    try {
+      const configExpiry = this.configService.get<string>(ENVEnum.PASSWORD_RESET_TOKEN_EXPIRY);
+      if (configExpiry) {
+        const parsed = parseInt(configExpiry, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          expiryMinutes = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse PASSWORD_RESET_TOKEN_EXPIRY, using default 15m', e);
+    }
+
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + expiryMinutes);
 
     // Save reset token to database
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token: resetToken,
-        expiresAt,
-      },
-    });
+    try {
+      await this.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          token: resetToken,
+          expiresAt,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to create password reset token:', error);
+      throw new InternalServerErrorException('Failed to generate reset token');
+    }
 
     // Send password reset email
     try {
