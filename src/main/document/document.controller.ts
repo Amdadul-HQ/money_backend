@@ -22,6 +22,7 @@ import { DocumentService } from './document.service';
 import { multerConfig } from 'src/common/config/multer.config';
 import { UploadDocumentResponseDto, UploadMetadataDto } from './dto/document.dto';
 import { JwtAuthGuard } from 'src/common/jwt/jwt.guard';
+import { TResponse } from 'src/common/utils/response.util';
 
 @ApiTags('Documents')
 @Controller('documents')
@@ -64,7 +65,7 @@ export class DocumentController {
     async uploadDocument(
         @UploadedFile() file: Express.Multer.File,
         @Body() metadata?: UploadMetadataDto,
-    ): Promise<UploadDocumentResponseDto> {
+    ): Promise<TResponse<UploadDocumentResponseDto>> {
         if (!file) {
             throw new BadRequestException('File is required');
         }

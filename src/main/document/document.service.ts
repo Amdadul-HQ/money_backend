@@ -4,6 +4,7 @@ import { UploadDocumentResponseDto } from './dto/document.dto';
 import { UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
 import * as fs from 'fs';
 import { promisify } from 'util';
+import { successResponse, TResponse } from 'src/common/utils/response.util';
 
 const unlinkAsync = promisify(fs.unlink);
 
@@ -20,7 +21,7 @@ export class DocumentService {
         file: Express.Multer.File,
         folder: string = 'documents',
         tags?: string[],
-    ): Promise<UploadDocumentResponseDto> {
+    ): Promise<TResponse<UploadDocumentResponseDto>> {
         if (!file) {
             throw new BadRequestException('No file provided');
         }
@@ -49,14 +50,16 @@ export class DocumentService {
             await this.cleanupTempFile(file.path);
 
             // Return formatted response
-            return {
+            const response = {
                 publicId: result.public_id,
                 secureUrl: result.secure_url,
                 originalName: file.originalname,
                 format: result.format,
                 resourceType: result.resource_type,
                 bytes: result.bytes,
-            };
+
+            }
+            return successResponse(response, 'Document uploaded successfully');
         } catch (error) {
             // Clean up temporary file in case of error
             await this.cleanupTempFile(file.path);
