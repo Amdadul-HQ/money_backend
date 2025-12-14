@@ -23,6 +23,14 @@ export class UtilsService {
     return plainToInstance(sto, data, { excludeExtraneousValues: true });
   }
 
+  serializeBigInt(data: any): any {
+    return JSON.parse(
+      JSON.stringify(data, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      ),
+    );
+  }
+
   removeDuplicateIds(ids: string[]) {
     return Array.from(new Set(ids));
   }

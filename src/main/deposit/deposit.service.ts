@@ -241,7 +241,10 @@ export class DepositService {
       });
     });
 
-    return successResponse(deposit, 'Deposit created successfully');
+    return successResponse(
+      this.libUtils.serializeBigInt(deposit),
+      'Deposit created successfully',
+    );
   }
 
   /**
@@ -310,7 +313,7 @@ export class DepositService {
     ]);
 
     return successResponse(
-      {
+      this.libUtils.serializeBigInt({
         deposits,
         pagination: {
           page,
@@ -318,7 +321,7 @@ export class DepositService {
           total,
           totalPages: Math.ceil(total / limit),
         },
-      },
+      }),
       'Deposits retrieved successfully',
     );
   }
@@ -352,7 +355,10 @@ export class DepositService {
       throw new NotFoundException('Deposit not found');
     }
 
-    return successResponse(deposit, 'Deposit retrieved successfully');
+    return successResponse(
+      this.libUtils.serializeBigInt(deposit),
+      'Deposit retrieved successfully',
+    );
   }
 
   /**
@@ -587,7 +593,10 @@ export class DepositService {
       });
     });
 
-    return successResponse(updatedDeposit, 'Deposit updated successfully');
+    return successResponse(
+      this.libUtils.serializeBigInt(updatedDeposit),
+      'Deposit updated successfully',
+    );
   }
 
   /**
@@ -761,7 +770,10 @@ export class DepositService {
       summaryStats,
     };
 
-    return successResponse(overview, 'Member overview retrieved successfully');
+    return successResponse(
+      this.libUtils.serializeBigInt(overview),
+      'Member overview retrieved successfully',
+    );
   }
 
   /**
