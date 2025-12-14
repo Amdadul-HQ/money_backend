@@ -30,6 +30,7 @@ model User {
   address             String?
   occupation          String?
   nid                 String?         @unique
+  documents           String?
   
   // Membership Details
   status              MemberStatus    @default(PENDING)

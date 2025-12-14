@@ -137,8 +137,8 @@ export class ImportService {
                             fatherName: userDto.fatherName || null,
                             motherName: userDto.motherName || null,
                             address: userDto.address || null,
-                            occupation: userDto.occupation || null,
                             nid: userDto.nid || null,
+                            occupation: userDto.occupation || null,
                             referencePerson: userDto.referencePerson || null,
                             referencePhone: userDto.referencePhone || null,
                             status: defaultStatus,
@@ -272,10 +272,6 @@ export class ImportService {
         // Optional field length validations
         if (dto.name && dto.name.length > 255) {
             errors.push('Name is too long (max 255 characters)');
-        }
-
-        if (dto.nid && dto.nid.length > 20) {
-            errors.push('NID is too long (max 20 characters)');
         }
 
         return errors;
