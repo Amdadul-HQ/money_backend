@@ -11,8 +11,12 @@ import {
   BlockUserDto,
   SuspendUserDto,
   UserActionResponseDto,
+  UserListQueryDto,
+  PaginatedUserResponseDto,
+  UserListItemDto,
+  UserDetailsDto,
 } from './dto/admin.dto';
-import { PaymentStatus, PaymentMethod, MemberStatus } from '@prisma/client';
+import { PaymentStatus, PaymentMethod, MemberStatus, Prisma } from '@prisma/client';
 import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
@@ -472,6 +476,153 @@ export class AdminService {
   private getMonthKey(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
-    return `${year} -${month} `;
+    return `${year}-${month}`;
+  }
+
+  /**
+   * 🔹 Get all users with pagination and filtering
+   */
+  async getAllUsers(query: UserListQueryDto): Promise<PaginatedUserResponseDto> {
+    const { page = 1, limit = 10, search, status, accountType } = query;
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: Prisma.UserWhereInput = {
+      // Search filter
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { phone: { contains: search, mode: 'insensitive' } },
+          { nid: { contains: search, mode: 'insensitive' } },
+          // Note: memberId is Int in schema but string in DTO/Frontend "BDT-2024-..."
+          // We can't search formatted string directly in DB easily without raw query
+          // If the user searches "123", we can search memberId field
+          ...(parseInt(search) ? [{ memberId: parseInt(search) }] : []),
+        ],
+      }),
+      // Status filter
+      ...(status && { status }),
+    };
+
+    // Account Type Filter (Dynamic)
+    // Premium: > 100,000 | Standard: > 10,000 | Basic: <= 10,000
+    if (accountType) {
+      const statsWhere: Prisma.MemberStatsWhereInput = {};
+      if (accountType === 'Premium') {
+        statsWhere.totalDeposited = { gt: 100000 };
+      } else if (accountType === 'Standard') {
+        statsWhere.totalDeposited = { gt: 10000, lte: 100000 };
+      } else if (accountType === 'Basic') {
+        statsWhere.totalDeposited = { lte: 10000 };
+      }
+
+      where.memberStats = statsWhere;
+    }
+
+    // Execute query
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          memberStats: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    // Map to DTO
+    const data: UserListItemDto[] = users.map((user) => {
+      const totalDeposited = Number(user.memberStats?.totalDeposited || 0);
+      const totalPenalties = Number(user.memberStats?.totalPenalties || 0);
+
+      // Determine Account Type
+      let type = 'Basic';
+      if (totalDeposited > 100000) type = 'Premium';
+      else if (totalDeposited > 10000) type = 'Standard';
+
+      return {
+        id: user.memberId,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        memberId: `BDT-${new Date().getFullYear()}-${String(user.memberId).padStart(6, '0')}`,
+        status: user.status,
+        accountType: type,
+        joinDate: user.joiningDate || user.createdAt,
+        lastLogin: (user as any).lastLogin || user.updatedAt, // Fallback if never logged in
+        totalDeposited,
+        currentBalance: totalDeposited, // Assuming strictly deposits for now
+        totalPenalties,
+        paymentStreak: user.memberStats?.consecutiveMonths || 0,
+        address: user.address || 'N/A',
+        avatar: (user as any).avatarUrl || '',
+      };
+    });
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * 🔹 Get single user details
+   */
+  async getUserDetails(userId: string): Promise<UserDetailsDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberStats: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const totalDeposited = Number(user.memberStats?.totalDeposited || 0);
+    const totalPenalties = Number(user.memberStats?.totalPenalties || 0);
+
+    // Determine Account Type
+    let type = 'Basic';
+    if (totalDeposited > 100000) type = 'Premium';
+    else if (totalDeposited > 10000) type = 'Standard';
+
+    return {
+      id: user.memberId,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      memberId: `BDT-${new Date().getFullYear()}-${String(user.memberId).padStart(6, '0')}`,
+      status: user.status,
+      accountType: type,
+      joinDate: user.joiningDate || user.createdAt,
+      lastLogin: (user as any).lastLogin || user.updatedAt,
+      totalDeposited,
+      currentBalance: totalDeposited,
+      totalPenalties,
+      paymentStreak: user.memberStats?.consecutiveMonths || 0,
+      address: user.address || 'N/A',
+      avatar: (user as any).avatarUrl || '',
+      // Extended details
+      occupation: user.occupation || undefined,
+      fatherName: user.fatherName || undefined,
+      motherName: user.motherName || undefined,
+      documents: user.documents || undefined,
+      referencePerson: user.referencePerson || undefined,
+      referencePhone: user.referencePhone || undefined,
+      registrationFee: Number(user.registrationFee),
+    };
   }
 }

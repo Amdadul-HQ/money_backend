@@ -31,6 +31,8 @@ model User {
   occupation          String?
   nid                 String?         @unique
   documents           String?
+  avatarUrl           String?
+  lastLogin           DateTime?
   
   // Membership Details
   status              MemberStatus    @default(PENDING)

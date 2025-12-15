@@ -23,7 +23,7 @@ export class UserRequestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly libUtils: UtilsService,
-  ) {}
+  ) { }
 
   /**
    * 🔹 Get all user registration requests (users with PENDING status)
@@ -493,6 +493,7 @@ export class UserRequestService {
       [MemberStatus.REJECTED]: 'Rejected',
       [MemberStatus.SUSPENDED]: 'Suspended',
       [MemberStatus.INACTIVE]: 'Inactive',
+      [MemberStatus.BLOCKED]: 'Blocked',
     };
 
     return statusMap[status] || status;

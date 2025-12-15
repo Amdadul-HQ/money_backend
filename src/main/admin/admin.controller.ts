@@ -3,8 +3,8 @@ import { ApiOperation, ApiTags, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { RequireAdmin } from 'src/common/jwt/admin.decorator';
 import { successResponse } from 'src/common/utils/response.util';
-import { BlockUserDto, SuspendUserDto } from './dto/admin.dto';
-import { Body, Delete, Param, Patch } from '@nestjs/common';
+import { BlockUserDto, SuspendUserDto, UserListQueryDto } from './dto/admin.dto';
+import { Body, Delete, Param, Patch, Query } from '@nestjs/common';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -20,6 +20,29 @@ export class AdminController {
   async getOverview() {
     const data = await this.adminService.getOverview();
     return successResponse(data, 'Admin overview retrieved successfully');
+  }
+
+  /**
+   * 🔹 Get all users
+   */
+  @Get('users')
+  @RequireAdmin()
+  @ApiOperation({ summary: 'Get all users with pagination and filtering' })
+  async getAllUsers(@Query() query: UserListQueryDto) {
+    const data = await this.adminService.getAllUsers(query);
+    return successResponse(data, 'Users retrieved successfully');
+  }
+
+  /**
+   * 🔹 Get user details
+   */
+  @Get('users/:id')
+  @RequireAdmin()
+  @ApiOperation({ summary: 'Get user details' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  async getUserDetails(@Param('id') id: string) {
+    const data = await this.adminService.getUserDetails(id);
+    return successResponse(data, 'User details retrieved successfully');
   }
 
   /**

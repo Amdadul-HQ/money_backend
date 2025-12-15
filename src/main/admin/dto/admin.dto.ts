@@ -1,10 +1,42 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { MemberStatus } from '@prisma/client';
 
 // ============================================
 // Request DTOs
 // ============================================
+
+export class UserListQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number = 10;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ enum: MemberStatus })
+  @IsOptional()
+  @IsEnum(MemberStatus)
+  status?: MemberStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  accountType?: string;
+}
 
 export class BlockUserDto {
   @ApiProperty({ example: 'Violation of community guidelines' })
@@ -151,5 +183,93 @@ export class UserActionResponseDto {
   message: string;
 
   @ApiPropertyOptional()
+  @ApiPropertyOptional()
   userId?: string;
+}
+
+export class UserListItemDto {
+  @ApiProperty()
+  id: number; // memberId sequence
+
+  @ApiProperty()
+  userId: string; // uuid
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  email: string;
+
+  @ApiProperty()
+  phone: string;
+
+  @ApiProperty()
+  memberId: string; // formatted BDT-xxxx
+
+  @ApiProperty()
+  status: string;
+
+  @ApiProperty()
+  accountType: string;
+
+  @ApiProperty()
+  joinDate: Date;
+
+  @ApiProperty()
+  lastLogin: Date;
+
+  @ApiProperty()
+  totalDeposited: number;
+
+  @ApiProperty()
+  currentBalance: number;
+
+  @ApiProperty()
+  totalPenalties: number;
+
+  @ApiProperty()
+  paymentStreak: number;
+
+  @ApiProperty()
+  address: string;
+
+  @ApiProperty()
+  avatar: string;
+}
+
+export class PaginatedUserResponseDto {
+  @ApiProperty({ type: [UserListItemDto] })
+  data: UserListItemDto[];
+
+  @ApiProperty()
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export class UserDetailsDto extends UserListItemDto {
+  // Add extended details if needed for detail view
+  @ApiPropertyOptional()
+  occupation?: string;
+
+  @ApiPropertyOptional()
+  fatherName?: string;
+
+  @ApiPropertyOptional()
+  motherName?: string;
+
+  @ApiPropertyOptional()
+  documents?: string;
+
+  @ApiPropertyOptional()
+  referencePerson?: string;
+
+  @ApiPropertyOptional()
+  referencePhone?: string;
+
+  @ApiPropertyOptional()
+  registrationFee?: number;
 }
