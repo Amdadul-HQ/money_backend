@@ -17,6 +17,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   RefreshTokenDto,
+  ChangePasswordDto,
 } from './dto/auth.dto';
 import { HandleError } from 'src/common/error/handle-error.decorator';
 import { ENVEnum } from 'src/common/enum/env.enum';
@@ -775,5 +776,55 @@ export class AuthService {
     }
 
     return date;
+  }
+
+  /**
+   * 🔹 Change Password
+   */
+  @HandleError('Failed to change password')
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const { currentPassword, newPassword, confirmPassword } = dto;
+
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException('New password and confirm password do not match');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isPasswordMatch = await this.libUtils.comparePassword({
+      password: currentPassword,
+      hashedPassword: user.password,
+    });
+
+    if (!isPasswordMatch) {
+      throw new BadRequestException('Invalid current password');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    // Revoke all refresh tokens for security
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        userId: userId,
+        revoked: false,
+      },
+      data: {
+        revoked: true,
+        revokedAt: new Date(),
+      },
+    });
+
+    return successResponse(null, 'Password changed successfully');
   }
 }

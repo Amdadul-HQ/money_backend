@@ -9,12 +9,13 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   RefreshTokenDto,
+  ChangePasswordDto,
 } from './dto/auth.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   /**
    * 🔹 User Registration with profile upload
@@ -81,5 +82,19 @@ export class AuthController {
     return await this.authService.revokeRefreshToken(
       refreshTokenDto.refreshToken,
     );
+  }
+
+  /**
+   * 🔹 Change Password (Protected Route)
+   */
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change Password' })
+  async changePassword(
+    @GetUser('userId') userId: string,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return await this.authService.changePassword(userId, changePasswordDto);
   }
 }
