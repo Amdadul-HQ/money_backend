@@ -30,7 +30,7 @@ export class DepositRequestService {
     private readonly libUtils: UtilsService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * 🔹 Get all deposit requests with filters and pagination
@@ -187,9 +187,9 @@ export class DepositRequestService {
       const daysLate =
         deposit.paymentDate > penaltyStartDate
           ? Math.floor(
-              (deposit.paymentDate.getTime() - penaltyStartDate.getTime()) /
-                (1000 * 60 * 60 * 24),
-            )
+            (deposit.paymentDate.getTime() - penaltyStartDate.getTime()) /
+            (1000 * 60 * 60 * 24),
+          )
           : 0;
 
       // Get payment method details
@@ -323,9 +323,9 @@ export class DepositRequestService {
     const daysLate =
       deposit.paymentDate > penaltyStartDate
         ? Math.floor(
-            (deposit.paymentDate.getTime() - penaltyStartDate.getTime()) /
-              (1000 * 60 * 60 * 24),
-          )
+          (deposit.paymentDate.getTime() - penaltyStartDate.getTime()) /
+          (1000 * 60 * 60 * 24),
+        )
         : 0;
 
     // Get payment method details
@@ -502,6 +502,39 @@ export class DepositRequestService {
 
       return updated;
     });
+
+    try {
+      const depositMonth = new Date(updatedDeposit.depositMonth);
+      const monthString = depositMonth.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+      });
+
+      // Get support email from config or use from email
+      const supportEmail =
+        this.configService.get<string>(ENVEnum.SMTP_FROM_EMAIL) ||
+        this.configService.get<string>(ENVEnum.SMTP_USER) ||
+        'support@example.com';
+
+      //      email: string,
+      // userName: string,
+      // depositAmount: number,
+      // depositMonth: string,
+      // memberId: number,
+      await this.emailService.sendDepositApprovalEmail(
+        depositRecord.user.email,
+        depositRecord.user.name,
+        Number(updatedDeposit.depositAmount),
+        monthString,
+        depositRecord.user.memberId,
+      );
+    } catch (error) {
+      // Log error but don't fail the rejection
+      this.logger.error(
+        `Failed to send approval email to ${depositRecord.user.email}:`,
+        error,
+      );
+    }
 
     return successResponse(
       {
