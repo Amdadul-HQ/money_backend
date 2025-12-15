@@ -445,7 +445,33 @@ export class AdminService {
 
     return {
       success: true,
-      message: `User ${user.name} has been suspended until ${dto.endDate.toLocaleDateString()} `,
+      message: `User ${user.name} has been suspended until ${dto.endDate.toLocaleDateString()}`,
+      userId: user.id,
+    };
+  }
+
+  /**
+   * 🔹 Activate a user
+   */
+  async activateUser(userId: string): Promise<UserActionResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: MemberStatus.ACTIVE,
+      },
+    });
+
+    return {
+      success: true,
+      message: `User ${user.name} has been activated successfully`,
       userId: user.id,
     };
   }

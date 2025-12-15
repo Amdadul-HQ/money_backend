@@ -82,4 +82,16 @@ export class AdminController {
     const data = await this.adminService.removeUser(id);
     return successResponse(data, data.message);
   }
+
+  /**
+   * 🔹 Activate a user
+   */
+  @Patch('users/:id/activate')
+  @RequireAdmin()
+  @ApiOperation({ summary: 'Activate a user' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  async activateUser(@Param('id') id: string) {
+    const data = await this.adminService.activateUser(id);
+    return successResponse(data, data.message);
+  }
 }
