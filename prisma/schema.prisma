@@ -337,6 +337,7 @@ enum MemberStatus {
   SUSPENDED       // Temporarily suspended
   INACTIVE        // Left the group
   REJECTED        // Registration rejected
+  BLOCKED         // Permanently blocked
 }
 
 enum PaymentStatus {

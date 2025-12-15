@@ -8,12 +8,16 @@ import {
   MonthlyCollectionDto,
   PaymentMethodDistributionDto,
   TopContributorDto,
+  BlockUserDto,
+  SuspendUserDto,
+  UserActionResponseDto,
 } from './dto/admin.dto';
 import { PaymentStatus, PaymentMethod, MemberStatus } from '@prisma/client';
+import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * 🔹 Get admin overview with all statistics
@@ -381,9 +385,93 @@ export class AdminService {
   /**
    * 🔹 Get month key for grouping (YYYY-MM format)
    */
+  /**
+   * 🔹 Block a user
+   */
+  async blockUser(
+    userId: string,
+    dto: BlockUserDto,
+  ): Promise<UserActionResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: MemberStatus.BLOCKED,
+      },
+    });
+
+    // Log the action (Optional but good practice)
+    // await this.logAction('BLOCK_USER', userId, dto.reason);
+
+    return {
+      success: true,
+      message: `User ${user.name} has been blocked successfully`,
+      userId: user.id,
+    };
+  }
+
+  /**
+   * 🔹 Suspend a user
+   */
+  async suspendUser(
+    userId: string,
+    dto: SuspendUserDto,
+  ): Promise<UserActionResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: MemberStatus.SUSPENDED,
+      },
+    });
+
+    return {
+      success: true,
+      message: `User ${user.name} has been suspended until ${dto.endDate.toLocaleDateString()} `,
+      userId: user.id,
+    };
+  }
+
+  /**
+   * 🔹 Remove (Delete) a user
+   */
+  async removeUser(userId: string): Promise<UserActionResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    return {
+      success: true,
+      message: `User ${user.name} has been removed successfully`,
+      userId: user.id,
+    };
+  }
+
   private getMonthKey(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
+    return `${year} -${month} `;
   }
 }

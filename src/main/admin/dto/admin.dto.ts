@@ -1,4 +1,29 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsDate, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+
+// ============================================
+// Request DTOs
+// ============================================
+
+export class BlockUserDto {
+  @ApiProperty({ example: 'Violation of community guidelines' })
+  @IsString()
+  @IsNotEmpty()
+  reason: string;
+}
+
+export class SuspendUserDto {
+  @ApiProperty({ example: 'Missed payments for 3 consecutive months' })
+  @IsString()
+  @IsNotEmpty()
+  reason: string;
+
+  @ApiProperty({ example: '2023-12-31T23:59:59.999Z' })
+  @IsDate()
+  @Type(() => Date)
+  endDate: Date;
+}
 
 // ============================================
 // Response DTOs
@@ -116,4 +141,15 @@ export class AdminOverviewDto {
 
   @ApiProperty({ type: [TopContributorDto] })
   topContributors: TopContributorDto[];
+}
+
+export class UserActionResponseDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiProperty()
+  message: string;
+
+  @ApiPropertyOptional()
+  userId?: string;
 }
