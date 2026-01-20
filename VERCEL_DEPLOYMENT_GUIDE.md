@@ -169,18 +169,15 @@ The `vercel.json` file configures how Vercel builds and routes your application:
 ```json
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    }
-  ],
   "routes": [
     {
       "src": "/(.*)",
       "dest": "api/index.ts"
     }
   ],
+  "env": {
+    "NODE_ENV": "production"
+  },
   "functions": {
     "api/index.ts": {
       "maxDuration": 30
@@ -192,7 +189,8 @@ The `vercel.json` file configures how Vercel builds and routes your application:
 **Key Points:**
 - All requests are routed to `api/index.ts`
 - Maximum function duration is set to 30 seconds (can be increased to 60s on Pro plan)
-- Uses `@vercel/node` builder for Node.js serverless functions
+- Vercel automatically detects and builds the serverless function from `api/index.ts`
+- The `builds` property is not needed in modern Vercel configurations
 
 ### Understanding `api/index.ts`
 
@@ -215,12 +213,6 @@ You can customize `vercel.json` for your needs:
 ```json
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    }
-  ],
   "routes": [
     {
       "src": "/(.*)",
@@ -239,6 +231,8 @@ You can customize `vercel.json` for your needs:
   "regions": ["iad1"]  // Optional: Deploy to specific regions
 }
 ```
+
+**Important:** Do not use both `builds` and `functions` properties together. Use only `functions` for configuration (as shown above). Vercel automatically detects serverless functions in the `api/` directory.
 
 **Function Limits:**
 - **Free Plan**: 10s max duration, 1GB memory
